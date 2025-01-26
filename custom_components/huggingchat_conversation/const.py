@@ -34,7 +34,7 @@ No devices in this area
 - Entities
     {%- for entity in area_entities(area) | reject('is_hidden_entity') -%}
       {%- if not entity.is_hidden_entity %}
-  - {{ state_attr(entity, 'friendly_name') }} ({{ entity }}){%- if states(entity) != "unknown" %}: {{ states(entity) }}{% endif %}
+  - {{ state_attr(entity, 'friendly_name') }} ({{ entity }}){%- if states(entity)!= "unknown" %}: {{ states(entity) }}{% endif %}
       {%- endif %}
     {%- endfor %}
   {%- else %}
@@ -51,11 +51,3 @@ If the user wants to control a device, reject the request and suggest using the 
 """
 DEFAULT_ASSISTANTS = False
 CONF_ASSISTANTS = "enable_assistants"
-DEFAULT_ASSISTANT_ID = "65bd6d583140495b7e30f744"
-CONF_ASSISTANT_ID = "assistant_id"
-DEFAULT_WEB_SEARCH = False
-CONF_WEB_SEARCH = "web_search"
-DEFAULT_WEB_SEARCH_ENGINE = "ddg"
-CONF_WEB_SEARCH_ENGINE = "web_search_engine"
-DEFAULT_WEB_SEARCH_PROMPT = "Here is some information from DuckDuckgo (please quote this information when using this product). Today is {{ states('sensor.date') }}. Please do not quote dates unless they appear in the results."
-CONF_WEB_SEARCH_PROMPT = "web_search_prompt"
