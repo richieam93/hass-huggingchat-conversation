@@ -4,7 +4,6 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
-from duckduckgo_search import AsyncDDGS
 from hugchat import hugchat
 from hugchat.login import Login
 
@@ -16,20 +15,12 @@ from homeassistant.exceptions import TemplateError
 from homeassistant.helpers import intent, template
 
 from .const import (
-    CONF_ASSISTANT_ID,
     CONF_ASSISTANTS,
     CONF_CHAT_MODEL,
     CONF_PROMPT,
-    CONF_WEB_SEARCH,
-    CONF_WEB_SEARCH_ENGINE,
-    CONF_WEB_SEARCH_PROMPT,
-    DEFAULT_ASSISTANT_ID,
     DEFAULT_ASSISTANTS,
     DEFAULT_CHAT_MODEL,
     DEFAULT_PROMPT,
-    DEFAULT_WEB_SEARCH,
-    DEFAULT_WEB_SEARCH_ENGINE,
-    DEFAULT_WEB_SEARCH_PROMPT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -81,19 +72,7 @@ class HuggingChatAgent(conversation.AbstractConversationAgent):
         passwd = self.entry.data[CONF_PASSWORD]
         model = int(self.entry.options.get(CONF_CHAT_MODEL, DEFAULT_CHAT_MODEL))
         raw_prompt = self.entry.options.get(CONF_PROMPT, DEFAULT_PROMPT)
-        assistants = self.entry.options.get(
-            CONF_ASSISTANTS, DEFAULT_ASSISTANTS
-        )
-        assistant_id = self.entry.options.get(
-            CONF_ASSISTANT_ID, DEFAULT_ASSISTANT_ID
-        )
-        web_search = self.entry.options.get(CONF_WEB_SEARCH, DEFAULT_WEB_SEARCH)
-        web_search_engine = self.entry.options.get(
-            CONF_WEB_SEARCH_ENGINE, DEFAULT_WEB_SEARCH_ENGINE
-        )
-        web_search_prompt = self.entry.options.get(
-            CONF_WEB_SEARCH_PROMPT, DEFAULT_WEB_SEARCH_PROMPT
-        )
+        assistants = self.entry.options.get(CONF_ASSISTANTS, DEFAULT_ASSISTANTS)
 
         cookie_path_dir = (
             "./config/custom_components/huggingchat_conversation/cookies_snapshot/"
@@ -103,7 +82,9 @@ class HuggingChatAgent(conversation.AbstractConversationAgent):
         sign = Login(email, passwd)
 
         try:
-            cookies = sign.loadCookiesFromDir(cookie_path_dir)
+            cookies = await self.hass.async_add_executor_job(
+                sign.loadCookiesFromDir, cookie_path_dir
+            )
         except Exception:
             cookies = await self.hass.async_add_executor_job(
                 sign.login, cookie_path_dir, True
@@ -115,8 +96,9 @@ class HuggingChatAgent(conversation.AbstractConversationAgent):
             )
 
         try:
+            prompt = self._async_generate_prompt(raw_prompt)
             chatbot = await self.hass.async_add_executor_job(
-                initialize_chatbot, cookies.get_dict(), model, ""
+                initialize_chatbot, cookies.get_dict(), model, prompt
             )
         except hugchat.exceptions.ChatBotInitError as err:
             _LOGGER.error("Chat initialisation error: %s", err)
@@ -124,6 +106,16 @@ class HuggingChatAgent(conversation.AbstractConversationAgent):
             intent_response.async_set_error(
                 intent.IntentResponseErrorCode.UNKNOWN,
                 f"Sorry, an error occurred when initialising the chat: {err}",
+            )
+            return conversation.ConversationResult(
+                response=intent_response, conversation_id=user_input.conversation_id
+            )
+        except TemplateError as err:
+            _LOGGER.error("Error rendering prompt: %s", err)
+            intent_response = intent.IntentResponse(language=user_input.language)
+            intent_response.async_set_error(
+                intent.IntentResponseErrorCode.UNKNOWN,
+                f"Sorry, I had a problem with my template: {err}",
             )
             return conversation.ConversationResult(
                 response=intent_response, conversation_id=user_input.conversation_id
@@ -151,19 +143,6 @@ class HuggingChatAgent(conversation.AbstractConversationAgent):
                     chatbot.delete_conversation, info
                 )
 
-                if web_search & (web_search_engine == "ddg"):
-
-                    async def aget_results():
-                        results = await AsyncDDGS().atext(user_input.text, max_results=5)
-                        formatted_results = [f"{r.get('title')}: {r.get('body')}\n" for r in results]
-                        return "".join(formatted_results)
-
-                    results = await aget_results()
-                    raw_prompt = (
-                        web_search_prompt + ":\n" + results + "\n\n" + raw_prompt
-                    )
-
-                prompt = self._async_generate_prompt(raw_prompt)
                 chatbot = await self.hass.async_add_executor_job(
                     initialize_chatbot,
                     cookies.get_dict(),
@@ -197,18 +176,12 @@ class HuggingChatAgent(conversation.AbstractConversationAgent):
 
         try:
             if assistants:
-                await self.hass.async_add_executor_job(chatbot.new_conversation, model, prompt, True, assistant_id)
+                await self.hass.async_add_executor_job(chatbot.new_conversation, model, prompt, True)
 
-            if web_search & (web_search_engine == "google"):
-                result = await self.hass.async_add_executor_job(
-                    str,
-                    chatbot.chat(user_input.text, web_search=True),
-                )
-            else:
-                result = await self.hass.async_add_executor_job(
-                    str,
-                    chatbot.chat(user_input.text),
-                )
+            result = await self.hass.async_add_executor_job(
+                str,
+                chatbot.chat(user_input.text),
+            )
         except hugchat.exceptions.ChatError as err:
             intent_response = intent.IntentResponse(language=user_input.language)
             intent_response.async_set_error(
