@@ -23,24 +23,16 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
-    CONF_ASSISTANT_ID,
     CONF_ASSISTANTS,
     CONF_CHAT_MODEL,
     CONF_EMAIL,
     CONF_PASSWORD,
     CONF_PROMPT,
-    CONF_WEB_SEARCH,
-    CONF_WEB_SEARCH_ENGINE,
-    CONF_WEB_SEARCH_PROMPT,
-    DEFAULT_ASSISTANT_ID,
     DEFAULT_ASSISTANTS,
     DEFAULT_CHAT_MODEL,
     DEFAULT_EMAIL,
     DEFAULT_PASSWORD,
     DEFAULT_PROMPT,
-    DEFAULT_WEB_SEARCH,
-    DEFAULT_WEB_SEARCH_ENGINE,
-    DEFAULT_WEB_SEARCH_PROMPT,
     DOMAIN,
 )
 
@@ -64,10 +56,6 @@ DEFAULT_OPTIONS = types.MappingProxyType(
         CONF_CHAT_MODEL: DEFAULT_CHAT_MODEL,
         CONF_PROMPT: DEFAULT_PROMPT,
         CONF_ASSISTANTS: DEFAULT_ASSISTANTS,
-        CONF_ASSISTANT_ID: DEFAULT_ASSISTANT_ID,
-        CONF_WEB_SEARCH: DEFAULT_WEB_SEARCH,
-        CONF_WEB_SEARCH_ENGINE: DEFAULT_WEB_SEARCH_ENGINE,
-        CONF_WEB_SEARCH_PROMPT: DEFAULT_WEB_SEARCH_PROMPT,
     }
 )
 
@@ -160,7 +148,7 @@ async def huggingchat_config_option_schema(
         sign = Login(email, passwd)
         cookies = await self.hass.async_add_executor_job(sign.login)
 
-        sign.saveCookiesToDir(cookie_path_dir)
+        await self.hass.async_add_executor_job(sign.saveCookiesToDir, cookie_path_dir)
         chatbot = await self.hass.async_add_executor_job(
             initialize_chatbot, cookies.get_dict()
         )
@@ -186,33 +174,6 @@ async def huggingchat_config_option_schema(
             description={"suggested_value": options[CONF_ASSISTANTS]},
             default=DEFAULT_ASSISTANTS,
         ): bool,
-        vol.Optional(
-            CONF_ASSISTANT_ID,
-            description={"suggested_value": options[CONF_ASSISTANT_ID]},
-            default=DEFAULT_ASSISTANT_ID,
-        ): str,
-        vol.Optional(
-            CONF_WEB_SEARCH,
-            description={"suggested_value": options[CONF_WEB_SEARCH]},
-            default=DEFAULT_WEB_SEARCH,
-        ): bool,
-        vol.Optional(
-            CONF_WEB_SEARCH_ENGINE,
-            description={"suggested_value": options[CONF_WEB_SEARCH_ENGINE]},
-        ): SelectSelector(
-            SelectSelectorConfig(
-                options=[
-                    {"label": "DuckDuckGo", "value": "ddg"},
-                    {"label": "Google", "value": "google"},
-                ],
-                mode="list",
-            )
-        ),
-        vol.Optional(
-            CONF_WEB_SEARCH_PROMPT,
-            description={"suggested_value": options[CONF_WEB_SEARCH_PROMPT]},
-            default=DEFAULT_WEB_SEARCH_PROMPT,
-        ): TemplateSelector(),
         vol.Optional(
             CONF_PROMPT,
             description={"suggested_value": options[CONF_PROMPT]},
